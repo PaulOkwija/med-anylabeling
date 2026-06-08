@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# med-anylabeling
-=======
 <p align="center">
   <img alt="Med-AnyLabeling" style="width: 128px; height: 128px;" src="https://github.com/user-attachments/assets/847e47e6-acf0-4f96-9ed9-5485ab405ae0"/>
   <h1 align="center">Med-AnyLabeling</h1>
@@ -125,4 +122,3 @@ Additional upstream components:
 ## License
 
 GPL-3.0 — see [LICENSE](LICENSE).
->>>>>>> e74f15c (Set up)

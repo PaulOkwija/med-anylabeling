@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the original AnyLabeling tool and this fork."
+authors:
+  - family-names: "Okwija"
+    given-names: "Paul"
+    alias: "PaulOkwija"
+    github: https://github.com/PaulOkwija
+title: "Med-AnyLabeling - Model-assisted labeling for medical imaging segmentation"
+url: "https://github.com/PaulOkwija/Med-AnyLabeling"
+license: GPL-3.0
+preferred-citation:
+  type: software
+  title: "AnyLabeling - Effortless data labeling with AI support"
+  authors:
+    - family-names: "Nguyen"
+      given-names: "Viet Anh"
+      orcid: https://orcid.org/0009-0002-0457-7811
+  url: "https://github.com/vietanhdev/anylabeling"
+  license: GPL-3.0

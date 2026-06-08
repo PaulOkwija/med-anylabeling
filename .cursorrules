@@ -1,0 +1,52 @@
+# Med-AnyLabeling — guidance for AI assistants
+
+**Fork of [AnyLabeling](https://github.com/vietanhdev/anylabeling) by Viet-Anh Nguyen.**
+**Maintained by [PaulOkwija](https://github.com/PaulOkwija).**
+
+This is a desktop image-annotation app on PyQt6 with an auto-labeling backend
+that runs ONNX models (SAM1/MobileSAM, SAM2, SAM2.1, YOLOv8). The fork's primary
+focus is **medical imaging segmentation** with session timing analytics.
+
+## Fork Goals
+1. Streamlined UI — remove clutter, keep segmentation workflows front-and-center
+2. Session timer built into the annotation workflow
+3. Single standalone Windows `.exe` (PyInstaller, zero install friction)
+
+## Conventions
+- Use **PyQt6** (not PyQt5).
+- macOS path **excludes PyQt6** from `pyproject.toml` (`platform_system != 'Darwin'`);
+  macOS users get it via conda. Don't add a Darwin-side floor without changing the
+  install story.
+- Keep code split into focused files; avoid growing `label_widget.py`
+  (already ~3.2k LOC) further when a new widget would do.
+- **Simplify, don't add** — for UI, always prefer removing clutter over adding options.
+
+## Architecture Cheat Sheet
+- Entry point: `anylabeling/app.py` → `MainWindow` → `LabelingWrapper` →
+  `LabelingWidget` (the "god widget" — owns canvas, file list, toolbars).
+- Auto-labeling: `anylabeling/services/auto_labeling/`
+  - `registry.py` → `@ModelRegistry.register("type-name")` decorator
+  - `model_manager.py` → loads `models.yaml`, downloads weights to
+    `~/anylabeling_data/models/`, dispatches `predict_shapes_threading()`
+  - `models.yaml` (`anylabeling/configs/auto_labeling/`) is the model
+    catalog the UI reads. New model = new entry **and** registered class.
+- Timing service: `anylabeling/services/timing/` (fork addition)
+  - Records per-image and per-session wall-clock time
+  - Exports to CSV for downstream efficiency analysis
+- CPU/GPU duality: `setup.py` reads `__preferred_device__` from
+  `anylabeling/app_info.py`; publish workflows `sed` it before `python -m build`.
+
+## Building the Executable
+See `docs/build_executable.md`. Uses PyInstaller + `anylabeling.spec`.
+ONNX DLLs are bundled explicitly in the spec. Build from a clean venv.
+
+## Resource Regeneration
+- PyQt6 dropped `pyrcc`. To rebuild `anylabeling/resources/resources.py`
+  use `python scripts/compile_languages.py` — it shells out to
+  `pyside6-rcc` and `pyside6-lrelease` and rewrites imports back to PyQt6.
+- `PySide6-Essentials` is a `[dev]` extra for this reason only.
+
+## Pre-Publish Gate
+- `.github/workflows/tests.yml` runs a matrix (Ubuntu/Windows/macOS × py3.11/3.12/3.13).
+- Always run `python -m unittest discover -s tests` in a fresh venv before tagging.
+- See `CLAUDE.md` for the full pre-publish playbook.

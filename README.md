@@ -80,15 +80,72 @@ pip install -e ".[gpu,dev]"
 
 ## Development
 
-```bash
-# Lint & format
-ruff check . && ruff format .
+### 1. Set up the environment
 
-# Run tests
+```bash
+conda create -n med-anylabeling python=3.12
+conda activate med-anylabeling
+
+# Editable install — code changes take effect without reinstalling
+pip install -e ".[dev]"
+```
+
+> On macOS (Apple Silicon) you also need: `conda install -c conda-forge pyqt=6`
+
+### 2. Run the app
+
+```bash
+python anylabeling/app.py
+```
+
+Open a specific image or label file directly:
+
+```bash
+python anylabeling/app.py path/to/image.png
+python anylabeling/app.py path/to/labels.json
+```
+
+### 3. Useful dev flags
+
+| Flag | Effect |
+|------|--------|
+| `--reset-config` | Wipe `~/.anylabelingrc` and start fresh — useful when config schema changes |
+| `--logger-level debug` | Verbose logging (options: `debug`, `info`, `warning`, `error`, `fatal`) |
+| `--config path/to/config.yaml` | Load a custom config instead of the user default |
+| `--output /tmp/labels` | Write all label files to a specific directory |
+| `--autosave` | Save labels automatically on every image change |
+| `--nosortlabels` | Preserve insertion order in the label list (skip alphabetical sort) |
+| `--nodata` | Skip embedding image data in JSON exports (keeps files small) |
+
+Example — start clean with debug logging:
+
+```bash
+python anylabeling/app.py --reset-config --logger-level debug
+```
+
+### 4. Lint, format & test
+
+```bash
+# Check and auto-fix style
+ruff check . --fix
+ruff format .
+
+# Run the full test suite
 python -m unittest discover -s tests -v
 ```
 
-See [CLAUDE.md](CLAUDE.md) for the full developer guide including architecture notes, pre-publish checklist, and model inference testing.
+Model inference tests (`tests/test_real_inference.py`) are skipped automatically when model
+weights are not present under `~/anylabeling_data/models/`.
+
+### 5. Config & data locations
+
+| Path | Contents |
+|------|----------|
+| `~/.anylabelingrc` | Persisted UI state (zoom, recent files, window size, …) |
+| `~/anylabeling_data/models/` | Downloaded ONNX model weights |
+| `anylabeling/configs/auto_labeling/models.yaml` | Model catalog — edit here to add/remove models |
+
+See [CLAUDE.md](CLAUDE.md) for the full developer guide: architecture notes, adding new models, and the pre-publish checklist.
 
 ---
 

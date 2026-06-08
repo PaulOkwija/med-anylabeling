@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 from anylabeling.app_info import __appname__
 from anylabeling.config import get_config, save_config
 from anylabeling.services.auto_labeling.types import AutoLabelingMode
+from anylabeling.services.timing import TimingService
 from anylabeling.styles import AppTheme
 from anylabeling.views.labeling import utils
 from anylabeling.views.labeling.label_file import LabelFile, LabelFileError
@@ -41,6 +42,8 @@ from anylabeling.views.labeling.widgets import (
 )
 
 from .widgets.export_dialog import ExportDialog
+from .widgets.session_dialog import SessionDialog
+from .widgets.timing_panel import TimingPanel
 
 LABEL_COLORMAP = imgviz.label_colormap().copy()
 
@@ -261,6 +264,18 @@ class LabelingWidget(LabelDialog):
         self.file_dock.setStyleSheet(dock_title_style)
         self.main_window.addDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.file_dock
+        )
+
+        # Timing panel dock
+        self.timing_panel = TimingPanel(parent=self)
+        self.timing_panel.navigate_to_image.connect(self.load_file)
+        self.timing_dock = QtWidgets.QDockWidget(self.tr("Session Timer"), self.main_window)
+        self.timing_dock.setObjectName("SessionTimer")
+        self.timing_dock.setFeatures(features)
+        self.timing_dock.setWidget(self.timing_panel)
+        self.timing_dock.setStyleSheet(dock_title_style)
+        self.main_window.addDockWidget(
+            Qt.DockWidgetArea.LeftDockWidgetArea, self.timing_dock
         )
 
         self.zoom_widget = ZoomWidget()
@@ -1860,6 +1875,9 @@ class LabelingWidget(LabelDialog):
                 if len(items) != 1:
                     raise RuntimeError("There are duplicate files.")
                 items[0].setCheckState(Qt.CheckState.Checked)
+            TimingService.instance().commit_image(
+                self.image_path, shape_count=len(shapes)
+            )
             # disable allows next and previous image to proceed
             # self.filename = filename
             return True
@@ -2238,6 +2256,8 @@ class LabelingWidget(LabelDialog):
         self.toggle_actions(True)
         self.canvas.setFocus()
         self.status(str(self.tr("Loaded %s")) % osp.basename(str(filename)))
+
+        TimingService.instance().start_image(filename)
 
         # Save dock state after loading file (to capture any UI adjustments)
         QtCore.QTimer.singleShot(100, self.save_dock_state)
@@ -2728,6 +2748,10 @@ class LabelingWidget(LabelDialog):
                 item.setCheckState(Qt.CheckState.Unchecked)
             self.file_list_widget.addItem(item)
         self.open_next_image(load=load)
+
+        # Offer to start/resume a session whenever a folder is opened
+        dlg = SessionDialog(folder=dirpath, parent=self)
+        dlg.exec()
 
     def scan_all_images(self, folder_path):
         extensions = [

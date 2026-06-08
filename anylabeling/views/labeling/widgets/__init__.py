@@ -11,4 +11,6 @@ from .toolbar import ToolBar
 from .unique_label_qlist_widget import UniqueLabelQListWidget
 from .zoom_widget import ZoomWidget
 
-# Package widgets
+from .session_dialog import SessionDialog
+from .session_review_dialog import SessionReviewDialog
+from .timing_panel import TimingPanel

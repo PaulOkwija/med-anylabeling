@@ -302,6 +302,7 @@ class LabelingWidget(LabelDialog):
         self.canvas.shape_moved.connect(self.set_dirty)
         self.canvas.selection_changed.connect(self.shape_selection_changed)
         self.canvas.drawing_polygon.connect(self.toggle_drawing_sensitive)
+        self.canvas.polygon_cut_requested.connect(self.apply_polygon_cut)
 
         self._central_widget = scroll_area
 
@@ -809,6 +810,14 @@ class LabelingWidget(LabelDialog):
             self.tr("Auto Labeling"),
         )
 
+        polygon_cut = create_action(
+            self.tr("&Polygon Cut"),
+            self.enter_cut_mode,
+            shortcuts["polygon_cut"],
+            "scissors",
+            self.tr("Erase part of a polygon mask by drawing a polygon over it"),
+        )
+
         # Label list context menu.
         label_menu = QtWidgets.QMenu()
         utils.add_actions(label_menu, (edit, delete))
@@ -842,6 +851,7 @@ class LabelingWidget(LabelDialog):
             create_line_mode=create_line_mode,
             create_point_mode=create_point_mode,
             create_line_strip_mode=create_line_strip_mode,
+            polygon_cut=polygon_cut,
             zoom=zoom,
             zoom_in=zoom_in,
             zoom_out=zoom_out,
@@ -871,6 +881,8 @@ class LabelingWidget(LabelDialog):
                 None,
                 toggle_keep_prev_mode,
                 toggle_auto_use_last_label_mode,
+                None,
+                polygon_cut,
             ),
             # menu shown at right click
             menu=(
@@ -1061,6 +1073,7 @@ class LabelingWidget(LabelDialog):
             zoom,
             fit_width,
             toggle_auto_labeling_widget,
+            polygon_cut,
         )
 
         # Create a movable dock widget for tools
@@ -2779,6 +2792,94 @@ class LabelingWidget(LabelDialog):
         else:
             self.auto_labeling_widget.show()
 
+    def enter_cut_mode(self):
+        """Activate polygon-cut mode.
+
+        The user selects a polygon shape first, then draws a polygon overlay
+        to erase that region from the mask.
+        """
+        if not self.image or self.image.isNull():
+            return
+        selected = self.canvas.selected_shapes
+        if len(selected) != 1 or selected[0].shape_type != "polygon":
+            self.status(
+                self.tr(
+                    "Polygon Cut: select exactly one polygon shape first, then press X."
+                )
+            )
+            return
+        self.canvas.set_cut_mode(True)
+        self.status(
+            self.tr(
+                "Polygon Cut: draw polygon over area to erase, "
+                "click first point to apply (Escape to cancel)."
+            )
+        )
+
+    @pyqtSlot(object)
+    def apply_polygon_cut(self, cutter_shape):
+        """Subtract the cutter polygon from the selected shape using OpenCV."""
+        import cv2
+        import numpy as np
+
+        selected = self.canvas.selected_shapes
+        if len(selected) != 1 or selected[0].shape_type != "polygon":
+            self.status(self.tr("Polygon Cut cancelled: no polygon selected."))
+            return
+
+        target = selected[0]
+        if len(target.points) < 3 or len(cutter_shape.points) < 3:
+            return
+
+        if self.image is None or self.image.isNull():
+            return
+
+        w = self.image.width()
+        h = self.image.height()
+
+        orig_pts = np.array(
+            [[int(p.x()), int(p.y())] for p in target.points], dtype=np.int32
+        )
+        cut_pts = np.array(
+            [[int(p.x()), int(p.y())] for p in cutter_shape.points], dtype=np.int32
+        )
+
+        mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.fillPoly(mask, [orig_pts], 255)
+        cv2.fillPoly(mask, [cut_pts], 0)
+
+        contours, _ = cv2.findContours(
+            mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_L1
+        )
+
+        # Save pre-cut state so Ctrl+Z works
+        self.canvas.store_shapes()
+
+        if not contours or cv2.contourArea(max(contours, key=cv2.contourArea)) < 1:
+            # Entire shape erased — delete it
+            item = self.label_list.find_item_by_shape(target)
+            if item:
+                self.label_list.remove_item(item)
+            if target in self.canvas.shapes:
+                self.canvas.shapes.remove(target)
+            self.canvas.selected_shapes = []
+            self.canvas.store_shapes()
+            self.set_dirty()
+            self.canvas.update()
+            return
+
+        largest = max(contours, key=cv2.contourArea)
+        new_points = [
+            QtCore.QPointF(float(pt[0][0]), float(pt[0][1])) for pt in largest
+        ]
+        target.points = new_points
+
+        # Save post-cut state
+        self.canvas.store_shapes()
+        self.set_dirty()
+        self.canvas.update()
+        self.status(self.tr("Polygon cut applied. Press Ctrl+Z to undo."))
+
     @pyqtSlot()
     def new_shapes_from_auto_labeling(self, auto_labeling_result):
         """Apply auto labeling results to the current image."""
@@ -3019,6 +3120,9 @@ class LabelingWidget(LabelDialog):
         self.main_window.addDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.file_dock
         )
+        self.main_window.addDockWidget(
+            Qt.DockWidgetArea.RightDockWidgetArea, self.timing_dock
+        )
 
         # Show all docks
         self.tools_dock.show()
@@ -3027,6 +3131,7 @@ class LabelingWidget(LabelDialog):
         self.label_dock.show()
         self.flag_dock.hide()
         self.shape_text_dock.show()
+        self.timing_dock.show()
 
         # Make sure tools dock is visible
         self.tools_dock.raise_()
@@ -3038,6 +3143,7 @@ class LabelingWidget(LabelDialog):
         self.label_dock.dockLocationChanged.connect(self.save_dock_state)
         self.shape_dock.dockLocationChanged.connect(self.save_dock_state)
         self.file_dock.dockLocationChanged.connect(self.save_dock_state)
+        self.timing_dock.dockLocationChanged.connect(self.save_dock_state)
 
         # Also connect visibility changes
         self.tools_dock.visibilityChanged.connect(self.save_dock_state)
@@ -3046,6 +3152,7 @@ class LabelingWidget(LabelDialog):
         self.label_dock.visibilityChanged.connect(self.save_dock_state)
         self.shape_dock.visibilityChanged.connect(self.save_dock_state)
         self.file_dock.visibilityChanged.connect(self.save_dock_state)
+        self.timing_dock.visibilityChanged.connect(self.save_dock_state)
 
         # Apply a workaround to ensure proper sizes
         self.main_window.resizeDocks(
@@ -3056,8 +3163,9 @@ class LabelingWidget(LabelDialog):
                 self.label_dock,
                 self.shape_dock,
                 self.file_dock,
+                self.timing_dock,
             ],
-            [40, 300, 300, 300, 300, 300],
+            [40, 300, 300, 300, 300, 300, 300],
             Qt.Orientation.Horizontal,
         )
 
@@ -3182,6 +3290,7 @@ class LabelingWidget(LabelDialog):
                     hasattr(self, "label_dock"),
                     hasattr(self, "shape_dock"),
                     hasattr(self, "file_dock"),
+                    hasattr(self, "timing_dock"),
                 ]
             )
 
@@ -3198,10 +3307,16 @@ class LabelingWidget(LabelDialog):
             self.label_dock.setVisible(True)
             self.shape_dock.setVisible(True)
             self.file_dock.setVisible(True)
+            self.timing_dock.setVisible(True)
 
             # Try to restore state
             if self.main_window.restoreState(dock_state):
                 logger.info("✓ Dock state loaded successfully")
+                # Ensure timing_dock is always on the right — guard against
+                # stale saved states that placed it on the left.
+                self.main_window.addDockWidget(
+                    Qt.DockWidgetArea.RightDockWidgetArea, self.timing_dock
+                )
                 # Apply a workaround for proper dock resizing
                 self.main_window.resizeDocks(
                     [
@@ -3211,8 +3326,9 @@ class LabelingWidget(LabelDialog):
                         self.label_dock,
                         self.shape_dock,
                         self.file_dock,
+                        self.timing_dock,
                     ],
-                    [40, 300, 300, 300, 300, 300],
+                    [40, 300, 300, 300, 300, 300, 300],
                     Qt.Orientation.Horizontal,
                 )
             else:

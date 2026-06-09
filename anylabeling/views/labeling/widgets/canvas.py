@@ -34,6 +34,7 @@ class Canvas(QtWidgets.QWidget):  # pylint: disable=too-many-public-methods, too
     drawing_polygon = QtCore.pyqtSignal(bool)
     vertex_selected = QtCore.pyqtSignal(bool)
     auto_labeling_marks_updated = QtCore.pyqtSignal(list)
+    polygon_cut_requested = QtCore.pyqtSignal(object)
 
     CREATE, EDIT = 0, 1
 
@@ -41,6 +42,7 @@ class Canvas(QtWidgets.QWidget):  # pylint: disable=too-many-public-methods, too
     _create_mode = "polygon"
 
     _fill_drawing = False
+    _is_cut_mode = False
 
     def __init__(self, *args, **kwargs):
         self.epsilon = kwargs.pop("epsilon", 10.0)
@@ -219,6 +221,24 @@ class Canvas(QtWidgets.QWidget):  # pylint: disable=too-many-public-methods, too
         if self.auto_labeling_mode is None:
             self.auto_labeling_mode = AutoLabelingMode.NONE
             self.parent.toggle_draw_mode(False, "rectangle", disable_auto_labeling=True)
+
+    def set_cut_mode(self, enabled):
+        """Enter or exit polygon-cut mode.
+
+        In cut mode the user draws a closed polygon; on completion the canvas
+        emits polygon_cut_requested instead of new_shape so label_widget can
+        subtract it from the selected shape.
+        """
+        self._is_cut_mode = enabled
+        if enabled:
+            self.set_editing(False)
+            self.create_mode = "polygon"
+            self.override_cursor(CURSOR_DRAW)
+            # Tint the guide line red so the user sees they are in cut mode
+            self.line.line_color = QtGui.QColor(220, 50, 50, 200)
+        else:
+            self.line.line_color = Shape.line_color  # restore class default
+            self.set_editing(True)
 
     def get_mode(self):
         """Get current mode"""
@@ -450,6 +470,8 @@ class Canvas(QtWidgets.QWidget):  # pylint: disable=too-many-public-methods, too
                 elif not self.out_off_pixmap(pos):
                     # Create new shape.
                     self.current = Shape(shape_type=self.create_mode)
+                    if self._is_cut_mode:
+                        self.current.line_color = QtGui.QColor(220, 50, 50, 200)
                     self.current.add_point(pos)
                     if self.create_mode == "point":
                         self.finalise()
@@ -872,6 +894,23 @@ class Canvas(QtWidgets.QWidget):  # pylint: disable=too-many-public-methods, too
                 QtCore.QPointF(self.pixmap.width(), self.prev_move_point.y()),
             )
 
+        if self._is_cut_mode:
+            # Show a "CUT MODE" banner at the top of the canvas so the user
+            # knows they are drawing a polygon eraser.
+            p.save()
+            p.resetTransform()
+            banner_rect = QtCore.QRect(0, 0, self.width(), 28)
+            p.fillRect(banner_rect, QtGui.QColor(220, 50, 50, 180))
+            p.setPen(QtGui.QColor(255, 255, 255))
+            p.setFont(QtGui.QFont("Arial", 11, QtGui.QFont.Weight.Bold))
+            p.setOpacity(1.0)
+            p.drawText(
+                banner_rect,
+                Qt.AlignmentFlag.AlignCenter,
+                self.tr("✂  CUT MODE — draw polygon, then click first point to apply"),
+            )
+            p.restore()
+
         p.end()
 
     def transform_pos(self, point):
@@ -900,6 +939,16 @@ class Canvas(QtWidgets.QWidget):  # pylint: disable=too-many-public-methods, too
     def finalise(self):
         """Finish drawing for a shape"""
         assert self.current
+        if self._is_cut_mode:
+            # Polygon cut: emit the cutter shape instead of adding it to canvas
+            self.current.close()
+            cutter = self.current
+            self.current = None
+            self.set_hiding(False)
+            self.update()
+            self.set_cut_mode(False)  # returns to EDIT mode and resets line colour
+            self.polygon_cut_requested.emit(cutter)
+            return
         if self.is_auto_labeling and self.auto_labeling_mode != AutoLabelingMode.NONE:
             self.current.label = self.auto_labeling_mode.edit_mode
         # TODO(vietanhdev): Temporrally fix. Need to refactor
@@ -1094,6 +1143,8 @@ class Canvas(QtWidgets.QWidget):  # pylint: disable=too-many-public-methods, too
             if key == QtCore.Qt.Key.Key_Escape and self.current:
                 self.current = None
                 self.drawing_polygon.emit(False)
+                if self._is_cut_mode:
+                    self.set_cut_mode(False)
                 self.update()
             elif key == QtCore.Qt.Key.Key_Return and self.can_close_shape():
                 self.finalise()

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(python -c \"from anylabeling.views.labeling.widgets.auto_labeling import AutoLabelingWidget; print\\('import ok'\\)\")"
+    ]
+  }
+}

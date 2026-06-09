@@ -56,7 +56,6 @@ class SessionDialog(QDialog):
 
         # -- NEW SESSION group --
         new_box = QGroupBox("Start a new session")
-        new_layout = QFormLayout(new_box)
 
         self._rb_new = QRadioButton()
         self._rb_new.setChecked(True)

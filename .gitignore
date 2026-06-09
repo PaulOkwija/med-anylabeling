@@ -13,3 +13,6 @@ zipped_models/*
 venv/
 # Sample images — not tracked in version control
 sample_images/
+
+# Personal session context notes
+CONTEXT.md

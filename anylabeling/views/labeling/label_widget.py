@@ -275,7 +275,7 @@ class LabelingWidget(LabelDialog):
         self.timing_dock.setWidget(self.timing_panel)
         self.timing_dock.setStyleSheet(dock_title_style)
         self.main_window.addDockWidget(
-            Qt.DockWidgetArea.LeftDockWidgetArea, self.timing_dock
+            Qt.DockWidgetArea.RightDockWidgetArea, self.timing_dock
         )
 
         self.zoom_widget = ZoomWidget()
@@ -1196,6 +1196,9 @@ class LabelingWidget(LabelDialog):
         )
         self.main_window.addDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.file_dock
+        )
+        self.main_window.addDockWidget(
+            Qt.DockWidgetArea.RightDockWidgetArea, self.timing_dock
         )
 
         self.shape_text_edit.textChanged.connect(self.shape_text_changed)
@@ -2432,13 +2435,13 @@ class LabelingWidget(LabelDialog):
             formats + [f"*{LabelFile.suffix}"]
         )
         file_dialog = FileDialogPreview(self)
-        file_dialog.setFileMode(FileDialogPreview.ExistingFile)
+        file_dialog.setFileMode(QtWidgets.QFileDialog.FileMode.ExistingFile)
         file_dialog.setNameFilter(filters)
         file_dialog.setWindowTitle(
             self.tr("%s - Choose Image or Label file") % __appname__,
         )
         file_dialog.setWindowFilePath(path)
-        file_dialog.setViewMode(FileDialogPreview.Detail)
+        file_dialog.setViewMode(QtWidgets.QFileDialog.ViewMode.Detail)
         if file_dialog.exec():
             filename = file_dialog.selectedFiles()[0]
             if filename:
